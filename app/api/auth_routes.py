@@ -72,7 +72,19 @@ async def send_verification_email(request: dict, db: Session = Depends(get_db)):
 # Verify code
 @router.post("/verify-code")
 async def verify_code_endpoint(request: EmailVerificationRequest, db: Session = Depends(get_db)):
+    # Lógica de bloqueo por intentos fallidos
+    blocked_user = db.query(BlockedEmail).filter_by(correo=request.email).first()
+    if blocked_user:
+        if blocked_user.bloqueado_hasta and blocked_user.bloqueado_hasta.replace(tzinfo=timezone.utc) > datetime.now(timezone.utc):
+            raise HTTPException(
+                status_code=403, detail="Tu cuenta está bloqueada temporalmente. Intenta más tarde."
+            )
+    # Verifica el código
     if verify_code(db, request.email, request.code):
+        # Si es correcto, limpia bloqueos
+        if blocked_user:
+            db.delete(blocked_user)
+            db.commit()
         access_token = create_access_token(data={"sub": request.email})
         return {
             "status": "success",
@@ -81,6 +93,23 @@ async def verify_code_endpoint(request: EmailVerificationRequest, db: Session = 
             "token_type": "bearer"
         }
     else:
+        # Maneja intentos fallidos
+        if not blocked_user:
+            blocked_user = BlockedEmail(
+                correo=request.email, intentos_fallidos=1
+            )
+            db.add(blocked_user)
+        else:
+            blocked_user.intentos_fallidos += 1
+        MAX_ATTEMPTS = 5
+        BLOCK_TIME = timedelta(minutes=15)
+        if blocked_user.intentos_fallidos >= MAX_ATTEMPTS:
+            blocked_user.bloqueado_hasta = datetime.now(timezone.utc) + BLOCK_TIME
+            db.commit()
+            raise HTTPException(
+                status_code=403, detail="Tu cuenta ha sido bloqueada temporalmente debido a intentos fallidos."
+            )
+        db.commit()
         raise HTTPException(
             status_code=400,
             detail="Código de verificación incorrecto o expirado"
@@ -114,11 +143,56 @@ async def register_user(request: UserRegistrationRequest, db: Session = Depends(
 # Login
 @router.post("/login")
 async def login_user(request: UserLoginRequest, db: Session = Depends(get_db)):
-    user_db = authenticate_user(db, request.email, request.password)
-    if not user_db:
-        raise HTTPException(status_code=401, detail="Credenciales inválidas")
-    access_token = create_access_token(data={"sub": user_db.correo})
-    return {"msg": "Login exitoso", "user_id": user_db.id_usuario, "access_token": access_token, "token_type": "bearer"}
+    user = db.query(User).filter_by(correo=request.email).first()
+    if not user:
+        raise HTTPException(status_code=401, detail="Usuario no encontrado")
+    if user.proveedor == "google":
+        raise HTTPException(status_code=401, detail="Ya has iniciado sesión con Google")
+    # Bloqueo por intentos fallidos
+    blocked_user = db.query(BlockedEmail).filter_by(correo=request.email).first()
+    if blocked_user:
+        if blocked_user.bloqueado_hasta and blocked_user.bloqueado_hasta.replace(tzinfo=timezone.utc) > datetime.now(timezone.utc):
+            raise HTTPException(
+                status_code=403, detail="Tu cuenta está bloqueada temporalmente. Intenta más tarde."
+            )
+    # Verifica contraseña
+    if not verify_password(request.password, user.contraseña):
+        if not blocked_user:
+            blocked_user = BlockedEmail(
+                correo=request.email, intentos_fallidos=1
+            )
+            db.add(blocked_user)
+        else:
+            blocked_user.intentos_fallidos += 1
+        # Define los máximos intentos y tiempo de bloqueo
+        MAX_ATTEMPTS = 5
+        BLOCK_TIME = timedelta(minutes=15)
+        if blocked_user.intentos_fallidos >= MAX_ATTEMPTS:
+            blocked_user.bloqueado_hasta = datetime.now(timezone.utc) + BLOCK_TIME
+            db.commit()
+            raise HTTPException(
+                status_code=403, detail="Tu cuenta ha sido bloqueada temporalmente debido a intentos fallidos."
+            )
+        db.commit()
+        raise HTTPException(status_code=401, detail="Credenciales incorrectas")
+    # Si el usuario tiene 2FA activado, requiere segundo paso
+    if user.TFA_enabled:
+        return {
+            "status": "2fa_required",
+            "message": "Se requiere autenticación de doble factor",
+            "email": user.correo
+        }
+    # Si login exitoso, limpia bloqueos
+    if blocked_user:
+        db.delete(blocked_user)
+        db.commit()
+    access_token = create_access_token(data={"sub": user.correo})
+    return {
+        "msg": "Login exitoso",
+        "user_id": user.id_usuario,
+        "access_token": access_token,
+        "token_type": "bearer"
+    }
 
 # Login with Google
 @router.post("/login-google")
