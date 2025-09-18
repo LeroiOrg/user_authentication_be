@@ -35,3 +35,35 @@ class BlockedEmailRead(BaseModel):
 
     class Config:
         orm_mode = True
+
+class UserUpdateRequest(BaseModel):
+    nombre: Optional[str] = None
+    name: Optional[str] = None
+    apellido: Optional[str] = None
+    last_name: Optional[str] = None
+    correo: Optional[EmailStr] = None
+    email: Optional[EmailStr] = None
+    proveedor: Optional[str] = None
+    provider: Optional[str] = None
+
+    class Config:
+        allow_population_by_field_name = True
+
+class UserLoginRequest(BaseModel):
+    email: EmailStr
+    password: str
+
+class GoogleLoginRequest(BaseModel):
+    email: str
+    name: str
+
+class EmailVerificationRequest(BaseModel):
+    email: EmailStr
+    code: str
+
+class UserRegistrationRequest(BaseModel):
+    name: str
+    last_name: str = ""
+    email: EmailStr
+    password: str = None
+    provider: str = "email"
