@@ -1,13 +1,13 @@
 import os
 import jwt
-from fastapi import APIRouter, Depends, HTTPException, status, Request
+from fastapi import APIRouter, Depends, HTTPException, status, Request, Body
 from fastapi_mail import MessageSchema
 from sqlalchemy.orm import Session
 from app.db.session import SessionLocal
 from app.models.user_model import User
 from app.models.blocked_email import BlockedEmail
 from app.models.verification_code import VerificationCode
-from app.schemas.user_scheme import UserCreate, UserLogin, UserRead, BlockedEmailRead
+from app.schemas.user_scheme import UserCreate, UserLogin, UserRead, BlockedEmailRead, UserUpdateRequest, UserLoginRequest, GoogleLoginRequest, EmailVerificationRequest, UserRegistrationRequest
 from app.services.auth_service import (
     register_user, authenticate_user, is_email_blocked, save_verification_code, verify_code,
     get_password_hash, create_access_token, decode_access_token, verify_password, login_or_register_google
@@ -22,7 +22,7 @@ security = HTTPBearer()
 
 SECRET_KEY = os.getenv("SECRET_KEY", "secret")
 ALGORITHM = os.getenv("ALGORITHM", "HS256")
-FRONTEND_URL = os.getenv("FRONTEND_URL", "http://localhost:3000")
+FRONTEND_URL = os.getenv("FRONTEND_URL", "http://localhost:5173")
 
 router = APIRouter()
 
@@ -70,13 +70,21 @@ async def send_verification_email(request: dict, db: Session = Depends(get_db)):
         raise HTTPException(status_code=500, detail=f"Error al enviar el email: {str(e)}")
 
 # Verify code
-class EmailVerificationRequest(BaseModel):
-    email: EmailStr
-    code: str
-
 @router.post("/verify-code")
 async def verify_code_endpoint(request: EmailVerificationRequest, db: Session = Depends(get_db)):
+    # Lógica de bloqueo por intentos fallidos
+    blocked_user = db.query(BlockedEmail).filter_by(correo=request.email).first()
+    if blocked_user:
+        if blocked_user.bloqueado_hasta and blocked_user.bloqueado_hasta.replace(tzinfo=timezone.utc) > datetime.now(timezone.utc):
+            raise HTTPException(
+                status_code=403, detail="Tu cuenta está bloqueada temporalmente. Intenta más tarde."
+            )
+    # Verifica el código
     if verify_code(db, request.email, request.code):
+        # Si es correcto, limpia bloqueos
+        if blocked_user:
+            db.delete(blocked_user)
+            db.commit()
         access_token = create_access_token(data={"sub": request.email})
         return {
             "status": "success",
@@ -85,21 +93,29 @@ async def verify_code_endpoint(request: EmailVerificationRequest, db: Session = 
             "token_type": "bearer"
         }
     else:
+        # Maneja intentos fallidos
+        if not blocked_user:
+            blocked_user = BlockedEmail(
+                correo=request.email, intentos_fallidos=1
+            )
+            db.add(blocked_user)
+        else:
+            blocked_user.intentos_fallidos += 1
+        MAX_ATTEMPTS = 5
+        BLOCK_TIME = timedelta(minutes=15)
+        if blocked_user.intentos_fallidos >= MAX_ATTEMPTS:
+            blocked_user.bloqueado_hasta = datetime.now(timezone.utc) + BLOCK_TIME
+            db.commit()
+            raise HTTPException(
+                status_code=403, detail="Tu cuenta ha sido bloqueada temporalmente debido a intentos fallidos."
+            )
+        db.commit()
         raise HTTPException(
             status_code=400,
             detail="Código de verificación incorrecto o expirado"
         )
 
 # Register user
-from pydantic import BaseModel, EmailStr
-
-class UserRegistrationRequest(BaseModel):
-    name: str
-    last_name: str = ""
-    email: EmailStr
-    password: str = None
-    provider: str = "email"
-
 @router.post("/register")
 async def register_user(request: UserRegistrationRequest, db: Session = Depends(get_db)):
     # Impedir el registro por bloqueo
@@ -125,23 +141,60 @@ async def register_user(request: UserRegistrationRequest, db: Session = Depends(
     return {"status": "success", "message": "Usuario registrado correctamente"}
 
 # Login
-class UserLoginRequest(BaseModel):
-    email: EmailStr
-    password: str
-
 @router.post("/login")
 async def login_user(request: UserLoginRequest, db: Session = Depends(get_db)):
-    user_db = authenticate_user(db, request.email, request.password)
-    if not user_db:
-        raise HTTPException(status_code=401, detail="Credenciales inválidas")
-    access_token = create_access_token(data={"sub": user_db.correo})
-    return {"msg": "Login exitoso", "user_id": user_db.id_usuario, "access_token": access_token, "token_type": "bearer"}
+    user = db.query(User).filter_by(correo=request.email).first()
+    if not user:
+        raise HTTPException(status_code=401, detail="Usuario no encontrado")
+    if user.proveedor == "google":
+        raise HTTPException(status_code=401, detail="Ya has iniciado sesión con Google")
+    # Bloqueo por intentos fallidos
+    blocked_user = db.query(BlockedEmail).filter_by(correo=request.email).first()
+    if blocked_user:
+        if blocked_user.bloqueado_hasta and blocked_user.bloqueado_hasta.replace(tzinfo=timezone.utc) > datetime.now(timezone.utc):
+            raise HTTPException(
+                status_code=403, detail="Tu cuenta está bloqueada temporalmente. Intenta más tarde."
+            )
+    # Verifica contraseña
+    if not verify_password(request.password, user.contraseña):
+        if not blocked_user:
+            blocked_user = BlockedEmail(
+                correo=request.email, intentos_fallidos=1
+            )
+            db.add(blocked_user)
+        else:
+            blocked_user.intentos_fallidos += 1
+        # Define los máximos intentos y tiempo de bloqueo
+        MAX_ATTEMPTS = 5
+        BLOCK_TIME = timedelta(minutes=15)
+        if blocked_user.intentos_fallidos >= MAX_ATTEMPTS:
+            blocked_user.bloqueado_hasta = datetime.now(timezone.utc) + BLOCK_TIME
+            db.commit()
+            raise HTTPException(
+                status_code=403, detail="Tu cuenta ha sido bloqueada temporalmente debido a intentos fallidos."
+            )
+        db.commit()
+        raise HTTPException(status_code=401, detail="Credenciales incorrectas")
+    # Si el usuario tiene 2FA activado, requiere segundo paso
+    if user.TFA_enabled:
+        return {
+            "status": "2fa_required",
+            "message": "Se requiere autenticación de doble factor",
+            "email": user.correo
+        }
+    # Si login exitoso, limpia bloqueos
+    if blocked_user:
+        db.delete(blocked_user)
+        db.commit()
+    access_token = create_access_token(data={"sub": user.correo})
+    return {
+        "msg": "Login exitoso",
+        "user_id": user.id_usuario,
+        "access_token": access_token,
+        "token_type": "bearer"
+    }
 
 # Login with Google
-class GoogleLoginRequest(BaseModel):
-    email: str
-    name: str
-
 @router.post("/login-google")
 async def login_google(request: GoogleLoginRequest, db: Session = Depends(get_db)):
     """
@@ -189,7 +242,7 @@ async def forgot_password(request: dict, db: Session = Depends(get_db)):
             ),
             subtype="html"
         )
-        # await fastmail.send_message(message)  # Descomenta si tienes fastmail configurado
+        await fastmail.send_message(message)  # Descomenta si tienes fastmail configurado
         return {"status": "success", "message": "Enlace de restablecimiento enviado", "email": email}
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Error al enviar el email: {str(e)}")
@@ -223,3 +276,158 @@ def get_blocked_email(correo: str, db: Session = Depends(get_db)):
     if not blocked:
         raise HTTPException(status_code=404, detail="Correo no bloqueado")
     return blocked
+
+@router.get("/user-profile")
+async def get_user_profile(
+    credentials: HTTPAuthorizationCredentials = Depends(security),
+    db: Session = Depends(get_db),
+):
+    """
+    Devuelve los datos del perfil del usuario autenticado.
+    """
+    token = credentials.credentials
+    try:
+        payload = decode_access_token(token)
+        email = payload.get("sub")
+        if not email:
+            raise HTTPException(status_code=400, detail="Token inválido")
+        user = db.query(User).filter_by(correo=email).first()
+        if not user:
+            raise HTTPException(status_code=404, detail="Usuario no encontrado")
+        # Si tienes Roadmap, descomenta la siguiente línea y el campo en la respuesta
+        # roadmaps_count = db.query(Roadmap).filter_by(id_usuario_creador=user.id_usuario).count()
+        return {
+            "status": "success",
+            "data": {
+                "firstName": user.nombre,
+                "lastName": user.apellido,
+                "email": user.correo,
+                "credits": user.creditos,
+                # "roadmapsCreated": roadmaps_count,  # Descomenta si tienes Roadmap
+                "provider": user.proveedor,
+                "TFA_enabled": user.TFA_enabled,
+            },
+        }
+    except jwt.ExpiredSignatureError:
+        raise HTTPException(status_code=401, detail="Token expirado")
+    except jwt.InvalidTokenError:
+        raise HTTPException(status_code=401, detail="Token inválido")
+##Conectar con la api q haga este endpoint
+@router.get("/user-roadmaps")
+async def user_roadmaps_placeholder():
+    return {"status": "info", "message": "Endpoint en desarrollo"}
+
+@router.put("/update-2fa")
+async def update_2fa_status(
+    credentials: HTTPAuthorizationCredentials = Depends(security),
+    db: Session = Depends(get_db),
+    is_2fa_enabled: bool = Body(..., embed=True),
+):
+    """
+    Actualiza el estado de la autenticación de doble factor (2FA) para el usuario autenticado.
+    """
+    token = credentials.credentials
+    try:
+        payload = decode_access_token(token)
+        email = payload.get("sub")
+        if not email:
+            raise HTTPException(status_code=400, detail="Token inválido")
+        user = db.query(User).filter_by(correo=email).first()
+        if not user:
+            raise HTTPException(status_code=404, detail="Usuario no encontrado")
+        user.TFA_enabled = is_2fa_enabled
+        db.commit()
+        return {
+            "status": "success",
+            "message": "Estado de 2FA actualizado correctamente",
+            "data": {
+                "TFA_enabled": user.TFA_enabled,
+            },
+        }
+    except jwt.ExpiredSignatureError:
+        raise HTTPException(status_code=401, detail="Token expirado")
+    except jwt.InvalidTokenError:
+        raise HTTPException(status_code=401, detail="Token inválido")
+    except Exception as e:
+        db.rollback()
+        raise HTTPException(status_code=500, detail=f"Error al actualizar el estado de 2FA: {str(e)}")
+
+# Modelo para actualizar usuario
+
+@router.delete("/delete-user/{email}")
+async def delete_user(
+    email: str,
+    credentials: HTTPAuthorizationCredentials = Depends(security),
+    db: Session = Depends(get_db)
+):
+    """
+    Eliminar un usuario y sus roadmaps asociados (si existieran).
+    """
+    token = credentials.credentials
+    try:
+        payload = decode_access_token(token)
+        authenticated_email = payload.get("sub")
+        user_role = payload.get("role") if "role" in payload else None
+        if not authenticated_email:
+            raise HTTPException(status_code=400, detail="Invalid token")
+        if user_role != "admin" and authenticated_email != email:
+            raise HTTPException(status_code=403, detail="Unauthorized action")
+        user_to_delete = db.query(User).filter_by(correo=email).first()
+        if not user_to_delete:
+            raise HTTPException(status_code=404, detail="User not found")
+        # Si tienes Roadmap, descomenta la siguiente línea
+        # db.query(Roadmap).filter(Roadmap.id_usuario_creador == user_to_delete.id_usuario).delete(synchronize_session=False)
+        db.delete(user_to_delete)
+        db.commit()
+        return {
+            "status": "success",
+            "message": "User deleted successfully",
+            "deleted_user_email": email
+        }
+    except jwt.ExpiredSignatureError:
+        raise HTTPException(status_code=401, detail="Token expired")
+    except jwt.InvalidTokenError:
+        raise HTTPException(status_code=401, detail="Invalid token")
+    except Exception as e:
+        db.rollback()
+        print(f"Error al borrar usuario: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+@router.put("/update-user")
+async def update_user(
+    request: UserUpdateRequest,
+    credentials: HTTPAuthorizationCredentials = Depends(security),
+    db: Session = Depends(get_db)
+):
+    try:
+        token = credentials.credentials
+        payload = decode_access_token(token)
+        authenticated_email = payload.get("sub")
+        if not authenticated_email:
+            raise HTTPException(status_code=400, detail="Token inválido")
+        user = db.query(User).filter(User.correo == authenticated_email).first()
+        if not user:
+            raise HTTPException(status_code=404, detail="Usuario no encontrado")
+        # Prioriza los campos en inglés si existen, si no usa los de español
+        if request.name or request.nombre:
+            user.nombre = request.name if request.name is not None else request.nombre
+        if request.last_name or request.apellido:
+            user.apellido = request.last_name if request.last_name is not None else request.apellido
+        if request.email or request.correo:
+            user.correo = request.email if request.email is not None else request.correo
+        if request.provider or request.proveedor:
+            user.proveedor = request.provider if request.provider is not None else request.proveedor
+        db.commit()
+        return {
+            "status": "success",
+            "message": "Datos de usuario actualizados correctamente",
+            "data": {
+                "nombre": user.nombre,
+                "apellido": user.apellido,
+                "correo": user.correo,
+                "proveedor": user.proveedor,
+            },
+        }
+    except Exception as e:
+        db.rollback()
+        raise HTTPException(status_code=500, detail=str(e))
