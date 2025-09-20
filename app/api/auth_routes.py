@@ -232,7 +232,14 @@ async def login_user(request: UserLoginRequest, db: Session = Depends(get_db)):
     if blocked_user:
         db.delete(blocked_user)
         db.commit()
-    access_token = create_access_token(data={"sub": user.correo})
+    access_token = create_access_token(data={
+        "id_usuario": user.id_usuario,
+        "nombre": user.nombre,
+        "apellido": user.apellido,
+        "correo": user.correo,
+        "proveedor": user.proveedor,
+        "TFA_enabled": user.TFA_enabled
+    })
     return {
         "msg": "Login exitoso",
         "user_id": user.id_usuario,
@@ -247,7 +254,14 @@ async def login_google(request: GoogleLoginRequest, db: Session = Depends(get_db
     Inicia sesión o registra un usuario con Google.
     """
     user = login_or_register_google(db, request.email, request.name)
-    access_token = create_access_token(data={"sub": user.correo})
+    access_token = create_access_token(data={
+        "id_usuario": user.id_usuario,
+        "nombre": user.nombre,
+        "apellido": user.apellido,
+        "correo": user.correo,
+        "proveedor": user.proveedor,
+        "TFA_enabled": user.TFA_enabled
+    })
     return {"status": "success", "access_token": access_token, "token_type": "bearer"}
 
 # Validate token
@@ -270,7 +284,14 @@ async def forgot_password(request: dict, db: Session = Depends(get_db)):
     if not user:
         raise HTTPException(status_code=401, detail="Usuario no encontrado")
     try:
-        reset_token = create_access_token(data={"sub": user.correo}, expires_delta=timedelta(minutes=10))
+        reset_token = create_access_token(data={
+            "id_usuario": user.id_usuario,
+            "nombre": user.nombre,
+            "apellido": user.apellido,
+            "correo": user.correo,
+            "proveedor": user.proveedor,
+            "TFA_enabled": user.TFA_enabled
+        }, expires_delta=timedelta(minutes=10))
         reset_link = f"{FRONTEND_URL}/reset-password?token={reset_token}"
         message = MessageSchema(
             subject="Restablecimiento de Contraseña - LEROI",
