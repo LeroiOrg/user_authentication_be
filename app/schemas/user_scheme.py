@@ -67,3 +67,43 @@ class UserRegistrationRequest(BaseModel):
     email: EmailStr
     password: str = None
     provider: str = "email"
+
+class CheckEmailRequest(BaseModel):
+    email: EmailStr
+    class Config:
+        schema_extra = {
+            "example": {
+                "email": "user@example.com"
+            }
+        }
+
+class SendVerificationRequest(BaseModel):
+    email: EmailStr
+    code: str
+    class Config:
+        schema_extra = {
+            "example": {
+                "email": "user@example.com",
+                "code": "123456"
+            }
+        }
+
+class ForgotPasswordRequest(BaseModel):
+    email: EmailStr
+    class Config:
+        schema_extra = {
+            "example": {
+                "email": "user@example.com"
+            }
+        }
+
+class ResetPasswordRequest(BaseModel):
+    token: str
+    new_password: str
+    class Config:
+        schema_extra = {
+            "example": {
+                "token": "<jwt_token>",
+                "new_password": "newStrongPassword123"
+            }
+        }

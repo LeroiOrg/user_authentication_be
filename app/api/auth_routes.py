@@ -7,7 +7,7 @@ from app.db.session import SessionLocal
 from app.models.user_model import User
 from app.models.blocked_email import BlockedEmail
 from app.models.verification_code import VerificationCode
-from app.schemas.user_scheme import UserCreate, UserLogin, UserRead, BlockedEmailRead, UserUpdateRequest, UserLoginRequest, GoogleLoginRequest, EmailVerificationRequest, UserRegistrationRequest
+from app.schemas.user_scheme import UserCreate, UserLogin, UserRead, BlockedEmailRead, UserUpdateRequest, UserLoginRequest, GoogleLoginRequest, EmailVerificationRequest, UserRegistrationRequest, CheckEmailRequest, SendVerificationRequest, ForgotPasswordRequest, ResetPasswordRequest
 from app.services.auth_service import (
     register_user, authenticate_user, is_email_blocked, save_verification_code, verify_code,
     get_password_hash, create_access_token, decode_access_token, verify_password, login_or_register_google
@@ -37,16 +37,16 @@ def get_db():
 
 # Check if email exists
 @router.post("/check-email")
-async def check_email(request: dict, db: Session = Depends(get_db)):
-    email = request.get("email")
+async def check_email(request: CheckEmailRequest, db: Session = Depends(get_db)):
+    email = request.email
     user = db.query(User).filter_by(correo=email).first()
     return {"status": "success", "exists": user is not None}
 
 # Send verification code
 @router.post("/send-verification")
-async def send_verification_email(request: dict, db: Session = Depends(get_db)):
-    email = request.get("email")
-    code = request.get("code")
+async def send_verification_email(request: SendVerificationRequest, db: Session = Depends(get_db)):
+    email = request.email
+    code = request.code
     try:
         save_verification_code(db, email, code)
         message = MessageSchema(
@@ -279,8 +279,8 @@ async def validate_token(credentials: HTTPAuthorizationCredentials = Depends(sec
 
 # Forgot password
 @router.post("/forgot-password")
-async def forgot_password(request: dict, db: Session = Depends(get_db)):
-    email = request.get("email")
+async def forgot_password(request: ForgotPasswordRequest, db: Session = Depends(get_db)):
+    email = request.email
     user = db.query(User).filter_by(correo=email).first()
     if not user:
         raise HTTPException(status_code=401, detail="Usuario no encontrado")
@@ -317,9 +317,9 @@ async def forgot_password(request: dict, db: Session = Depends(get_db)):
 
 # Reset password
 @router.post("/reset-password")
-async def reset_password(request: dict, db: Session = Depends(get_db)):
-    token = request.get("token")
-    new_password = request.get("new_password")
+async def reset_password(request: ResetPasswordRequest, db: Session = Depends(get_db)):
+    token = request.token
+    new_password = request.new_password
     try:
         payload = jwt.decode(token, SECRET_KEY, algorithms=[ALGORITHM])
         email = payload.get("correo")
