@@ -2,7 +2,9 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from app.api.auth_routes import router
 
-app = FastAPI(title="LEROI Backend")
+app = FastAPI(title="LEROI Backend-User Authentication")
+description="API for user authentication, credits management, and more. Provides endpoints for registration, login, 2FA, credits, and user management.",
+
 
 app.add_middleware(
 	CORSMiddleware,
