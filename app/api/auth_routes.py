@@ -16,6 +16,7 @@ from app.services.email_service import fastmail
 from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
 from datetime import timedelta, datetime, timezone
 from pydantic import BaseModel, EmailStr
+from app.schemas.credits_scheme import CreditsUpdateRequest
 
 router = APIRouter()
 security = HTTPBearer()
@@ -498,3 +499,51 @@ async def update_user(
     except Exception as e:
         db.rollback()
         raise HTTPException(status_code=500, detail=str(e))
+
+@router.get("/user-credits/{email}")
+async def get_user_credits(
+    email: str,
+    credentials: HTTPAuthorizationCredentials = Depends(security),
+    db: Session = Depends(get_db)
+):
+    """
+    Consulta la cantidad de créditos de un usuario por correo. Protegido por JWT.
+    """
+    token = credentials.credentials
+    try:
+        decode_access_token(token)
+        user = db.query(User).filter_by(correo=email).first()
+        if not user:
+            raise HTTPException(status_code=404, detail="Usuario no encontrado")
+        return {"status": "success", "email": email, "credits": user.creditos}
+    except jwt.ExpiredSignatureError:
+        raise HTTPException(status_code=401, detail="Token expirado")
+    except jwt.InvalidTokenError:
+        raise HTTPException(status_code=401, detail="Token inválido")
+
+
+@router.patch("/user-credits/{email}")
+async def update_user_credits(
+    email: str,
+    request: CreditsUpdateRequest,
+    credentials: HTTPAuthorizationCredentials = Depends(security),
+    db: Session = Depends(get_db)
+):
+    """
+    Suma o resta créditos al usuario especificado por correo. Protegido por JWT.
+    """
+    token = credentials.credentials
+    try:
+        decode_access_token(token)
+        user = db.query(User).filter_by(correo=email).first()
+        if not user:
+            raise HTTPException(status_code=404, detail="Usuario no encontrado")
+        user.creditos += request.amount
+        if user.creditos < 0:
+            user.creditos = 0  # No permitir créditos negativos
+        db.commit()
+        return {"status": "success", "email": email, "credits": user.creditos}
+    except jwt.ExpiredSignatureError:
+        raise HTTPException(status_code=401, detail="Token expirado")
+    except jwt.InvalidTokenError:
+        raise HTTPException(status_code=401, detail="Token inválido")
