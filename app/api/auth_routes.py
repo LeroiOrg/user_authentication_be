@@ -321,7 +321,7 @@ async def reset_password(request: dict, db: Session = Depends(get_db)):
     new_password = request.get("new_password")
     try:
         payload = jwt.decode(token, SECRET_KEY, algorithms=[ALGORITHM])
-        email = payload.get("sub")
+        email = payload.get("correo")
         if email is None:
             raise HTTPException(status_code=400, detail="Token inválido")
         user = db.query(User).filter_by(correo=email).first()
@@ -355,7 +355,7 @@ async def get_user_profile(
     token = credentials.credentials
     try:
         payload = decode_access_token(token)
-        email = payload.get("sub")
+        email = payload.get("correo")
         if not email:
             raise HTTPException(status_code=400, detail="Token inválido")
         user = db.query(User).filter_by(correo=email).first()
@@ -396,7 +396,7 @@ async def update_2fa_status(
     token = credentials.credentials
     try:
         payload = decode_access_token(token)
-        email = payload.get("sub")
+        email = payload.get("correo")
         if not email:
             raise HTTPException(status_code=400, detail="Token inválido")
         user = db.query(User).filter_by(correo=email).first()
@@ -433,7 +433,7 @@ async def delete_user(
     token = credentials.credentials
     try:
         payload = decode_access_token(token)
-        authenticated_email = payload.get("sub")
+        authenticated_email = payload.get("correo")
         user_role = payload.get("role") if "role" in payload else None
         if not authenticated_email:
             raise HTTPException(status_code=400, detail="Invalid token")
@@ -469,7 +469,7 @@ async def update_user(
     try:
         token = credentials.credentials
         payload = decode_access_token(token)
-        authenticated_email = payload.get("sub")
+        authenticated_email = payload.get("correo")
         if not authenticated_email:
             raise HTTPException(status_code=400, detail="Token inválido")
         user = db.query(User).filter(User.correo == authenticated_email).first()
