@@ -69,23 +69,70 @@ async def send_verification_email(request: dict, db: Session = Depends(get_db)):
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Error al enviar el email: {str(e)}")
 
-# Verify code
+
+# Verificación de código para registro (solo valida el código, no busca usuario)
 @router.post("/verify-code")
 async def verify_code_endpoint(request: EmailVerificationRequest, db: Session = Depends(get_db)):
-    # Lógica de bloqueo por intentos fallidos
     blocked_user = db.query(BlockedEmail).filter_by(correo=request.email).first()
     if blocked_user:
         if blocked_user.bloqueado_hasta and blocked_user.bloqueado_hasta.replace(tzinfo=timezone.utc) > datetime.now(timezone.utc):
             raise HTTPException(
                 status_code=403, detail="Tu cuenta está bloqueada temporalmente. Intenta más tarde."
             )
-    # Verifica el código
     if verify_code(db, request.email, request.code):
-        # Si es correcto, limpia bloqueos
         if blocked_user:
             db.delete(blocked_user)
             db.commit()
-        access_token = create_access_token(data={"sub": request.email})
+        return {
+            "status": "success",
+            "message": "Código de verificación correcto"
+        }
+    else:
+        if not blocked_user:
+            blocked_user = BlockedEmail(
+                correo=request.email, intentos_fallidos=1
+            )
+            db.add(blocked_user)
+        else:
+            blocked_user.intentos_fallidos += 1
+        MAX_ATTEMPTS = 5
+        BLOCK_TIME = timedelta(minutes=15)
+        if blocked_user.intentos_fallidos >= MAX_ATTEMPTS:
+            blocked_user.bloqueado_hasta = datetime.now(timezone.utc) + BLOCK_TIME
+            db.commit()
+            raise HTTPException(
+                status_code=403, detail="Tu cuenta ha sido bloqueada temporalmente debido a intentos fallidos."
+            )
+        db.commit()
+        raise HTTPException(
+            status_code=400,
+            detail="Código de verificación incorrecto o expirado"
+        )
+
+# Verificación de código para 2FA (requiere usuario y devuelve token)
+@router.post("/verify-2fa-code")
+async def verify_2fa_code(request: EmailVerificationRequest, db: Session = Depends(get_db)):
+    blocked_user = db.query(BlockedEmail).filter_by(correo=request.email).first()
+    if blocked_user:
+        if blocked_user.bloqueado_hasta and blocked_user.bloqueado_hasta.replace(tzinfo=timezone.utc) > datetime.now(timezone.utc):
+            raise HTTPException(
+                status_code=403, detail="Tu cuenta está bloqueada temporalmente. Intenta más tarde."
+            )
+    if verify_code(db, request.email, request.code):
+        if blocked_user:
+            db.delete(blocked_user)
+            db.commit()
+        user = db.query(User).filter_by(correo=request.email).first()
+        if not user:
+            raise HTTPException(status_code=404, detail="Usuario no encontrado")
+        access_token = create_access_token(data={
+            "sub": user.correo,
+            "nombre": user.nombre,
+            "apellido": user.apellido,
+            "correo": user.correo,
+            "proveedor": user.proveedor,
+            "id_usuario": user.id_usuario
+        })
         return {
             "status": "success",
             "message": "Código de verificación correcto",
@@ -93,7 +140,6 @@ async def verify_code_endpoint(request: EmailVerificationRequest, db: Session = 
             "token_type": "bearer"
         }
     else:
-        # Maneja intentos fallidos
         if not blocked_user:
             blocked_user = BlockedEmail(
                 correo=request.email, intentos_fallidos=1
@@ -186,7 +232,14 @@ async def login_user(request: UserLoginRequest, db: Session = Depends(get_db)):
     if blocked_user:
         db.delete(blocked_user)
         db.commit()
-    access_token = create_access_token(data={"sub": user.correo})
+    access_token = create_access_token(data={
+        "id_usuario": user.id_usuario,
+        "nombre": user.nombre,
+        "apellido": user.apellido,
+        "correo": user.correo,
+        "proveedor": user.proveedor,
+        "TFA_enabled": user.TFA_enabled
+    })
     return {
         "msg": "Login exitoso",
         "user_id": user.id_usuario,
@@ -201,7 +254,14 @@ async def login_google(request: GoogleLoginRequest, db: Session = Depends(get_db
     Inicia sesión o registra un usuario con Google.
     """
     user = login_or_register_google(db, request.email, request.name)
-    access_token = create_access_token(data={"sub": user.correo})
+    access_token = create_access_token(data={
+        "id_usuario": user.id_usuario,
+        "nombre": user.nombre,
+        "apellido": user.apellido,
+        "correo": user.correo,
+        "proveedor": user.proveedor,
+        "TFA_enabled": user.TFA_enabled
+    })
     return {"status": "success", "access_token": access_token, "token_type": "bearer"}
 
 # Validate token
@@ -224,7 +284,14 @@ async def forgot_password(request: dict, db: Session = Depends(get_db)):
     if not user:
         raise HTTPException(status_code=401, detail="Usuario no encontrado")
     try:
-        reset_token = create_access_token(data={"sub": user.correo}, expires_delta=timedelta(minutes=10))
+        reset_token = create_access_token(data={
+            "id_usuario": user.id_usuario,
+            "nombre": user.nombre,
+            "apellido": user.apellido,
+            "correo": user.correo,
+            "proveedor": user.proveedor,
+            "TFA_enabled": user.TFA_enabled
+        }, expires_delta=timedelta(minutes=10))
         reset_link = f"{FRONTEND_URL}/reset-password?token={reset_token}"
         message = MessageSchema(
             subject="Restablecimiento de Contraseña - LEROI",
