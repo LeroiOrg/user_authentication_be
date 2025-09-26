@@ -19,14 +19,14 @@ def always_verify_password_true():
 
 # Mock user data
 mock_user = {
-    "id_usuario": 1,
-    "nombre": "Test",
-    "apellido": "User",
-    "correo": "testuser@example.com",
-    "proveedor": "email",
-    "creditos": 1000,
-    "TFA_enabled": False,
-    "contraseña": "hashedpass"
+    "user_id": 1,
+    "first_name": "Test",
+    "last_name": "User",
+    "email": "testuser@example.com",
+    "provider": "email",
+    "credits": 1000,
+    "tfa_enabled": False,
+    "password": "hashedpass"
 }
 
 @pytest.fixture
@@ -43,7 +43,7 @@ def test_register_user(mock_user_model, mock_db_session):
     mock_db_session.add.return_value = None
     mock_db_session.commit.return_value = None
     mock_db_session.refresh.return_value = None
-    response = client.post("/register", json={
+    response = client.post("/users_authentication_path/register", json={
         "name": "Test",
         "last_name": "User",
         "email": "testuser@example.com",
@@ -55,18 +55,19 @@ def test_register_user(mock_user_model, mock_db_session):
 
 def test_login_user(mock_db_session):
     user_instance = MagicMock(**mock_user)
-    user_instance.contraseña = "hashedpass"
-    user_instance.proveedor = "email"
-    user_instance.TFA_enabled = False
-    user_instance.id_usuario = 1
-    user_instance.nombre = "Test"
-    user_instance.apellido = "User"
-    user_instance.correo = "testuser@example.com"
+    # Asegurar atributos esperados por la API en inglés
+    user_instance.password = mock_user["password"]
+    user_instance.provider = mock_user["provider"]
+    user_instance.tfa_enabled = False
+    user_instance.user_id = mock_user["user_id"]
+    user_instance.first_name = mock_user["first_name"]
+    user_instance.last_name = mock_user["last_name"]
+    user_instance.email = mock_user["email"]
     # El primer llamado es para User, el segundo para BlockedEmail
     mock_db_session.query.return_value.filter_by.return_value.first.side_effect = [user_instance, None]
     from unittest.mock import patch
     with patch("app.api.auth_routes.verify_password", return_value=True):
-        response = client.post("/login", json={
+        response = client.post("/users_authentication_path/login", json={
             "email": "testuser@example.com",
             "password": "testpass123"
         })
@@ -76,16 +77,16 @@ def test_login_user(mock_db_session):
 @patch("app.api.auth_routes.User")
 def test_forgot_password(mock_user_model, mock_db_session):
     user_instance = MagicMock(**mock_user)
-    user_instance.id_usuario = 1
-    user_instance.nombre = "Test"
-    user_instance.apellido = "User"
-    user_instance.correo = "testuser@example.com"
-    user_instance.proveedor = "email"
-    user_instance.TFA_enabled = False
+    user_instance.user_id = mock_user["user_id"]
+    user_instance.first_name = mock_user["first_name"]
+    user_instance.last_name = mock_user["last_name"]
+    user_instance.email = mock_user["email"]
+    user_instance.provider = mock_user["provider"]
+    user_instance.tfa_enabled = False
     mock_db_session.query.return_value.filter_by.return_value.first.return_value = user_instance
     with patch("app.api.auth_routes.fastmail.send_message", return_value=None):
         with patch("app.services.auth_service.create_access_token", return_value="token123"):
-            response = client.post("/forgot-password", json={
+            response = client.post("/users_authentication_path/forgot-password", json={
                 "email": "testuser@example.com"
             })
     assert response.status_code == 200
@@ -94,37 +95,37 @@ def test_forgot_password(mock_user_model, mock_db_session):
 def test_update_user(mock_db_session):
     # Simula usuario existente
     user_instance = MagicMock(**mock_user)
-    user_instance.id_usuario = 1
-    user_instance.nombre = "Test"
-    user_instance.apellido = "User"
-    user_instance.correo = "testuser@example.com"
-    user_instance.proveedor = "email"
-    user_instance.TFA_enabled = False
+    user_instance.user_id = mock_user["user_id"]
+    user_instance.first_name = mock_user["first_name"]
+    user_instance.last_name = mock_user["last_name"]
+    user_instance.email = mock_user["email"]
+    user_instance.provider = mock_user["provider"]
+    user_instance.tfa_enabled = False
     # Mock para búsqueda de usuario
     mock_db_session.query.return_value.filter.return_value.first.return_value = user_instance
     # Mock token JWT
     token = "fake.jwt.token"
-    with patch("app.api.auth_routes.decode_access_token", return_value={"correo": "testuser@example.com"}):
+    with patch("app.api.auth_routes.decode_access_token", return_value={"email": "testuser@example.com"}):
         headers = {"Authorization": f"Bearer {token}"}
-        response = client.put("/update-user", json={"name": "NuevoNombre"}, headers=headers)
+        response = client.put("/users_authentication_path/update-user", json={"first_name": "NuevoNombre"}, headers=headers)
     assert response.status_code == 200
     assert response.json()["status"] == "success"
 
 def test_delete_user(mock_db_session):
     # Simula usuario existente
     user_instance = MagicMock(**mock_user)
-    user_instance.id_usuario = 1
-    user_instance.nombre = "Test"
-    user_instance.apellido = "User"
-    user_instance.correo = "testuser@example.com"
-    user_instance.proveedor = "email"
-    user_instance.TFA_enabled = False
+    user_instance.user_id = mock_user["user_id"]
+    user_instance.first_name = mock_user["first_name"]
+    user_instance.last_name = mock_user["last_name"]
+    user_instance.email = mock_user["email"]
+    user_instance.provider = mock_user["provider"]
+    user_instance.tfa_enabled = False
     # Mock para búsqueda de usuario
     mock_db_session.query.return_value.filter_by.return_value.first.return_value = user_instance
     # Mock token JWT con rol admin
     token = "fake.jwt.token"
-    with patch("app.api.auth_routes.decode_access_token", return_value={"correo": "testuser@example.com", "role": "admin"}):
+    with patch("app.api.auth_routes.decode_access_token", return_value={"email": "testuser@example.com", "role": "admin"}):
         headers = {"Authorization": f"Bearer {token}"}
-        response = client.delete(f"/delete-user/{user_instance.correo}", headers=headers)
+        response = client.delete(f"/users_authentication_path/delete-user/{user_instance.email}", headers=headers)
     assert response.status_code == 200
     assert response.json()["status"] == "success"

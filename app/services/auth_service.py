@@ -68,14 +68,14 @@ def authenticate_user(db: Session, correo: str, contraseña: str):
 
 def save_verification_code(db: Session, email: str, code: str, minutes_expire: int = 5):
     expiration = datetime.now(timezone.utc) + timedelta(minutes=minutes_expire)
-    db_code = VerificationCode(email=email, code=code, expiracion=expiration)
+    db_code = VerificationCode(email=email, code=code, expiration=expiration)
     db.add(db_code)
     db.commit()
     return db_code
 
 def verify_code(db: Session, email: str, code: str) -> bool:
     db_code = db.query(VerificationCode).filter_by(email=email, code=code).first()
-    if db_code and db_code.expiracion.replace(tzinfo=timezone.utc) > datetime.now(timezone.utc):
+    if db_code and db_code.expiration.replace(tzinfo=timezone.utc) > datetime.now(timezone.utc):
         db.delete(db_code)
         db.commit()
         return True
