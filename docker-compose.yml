@@ -1,0 +1,36 @@
+version: '3.8'
+
+services:
+  db_user_authentication:
+    image: postgres:15
+    restart: always
+    environment:
+      POSTGRES_USER: leroiuser
+      POSTGRES_PASSWORD: leroipassword
+      POSTGRES_DB: leroidb
+    ports:
+      - "5433:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+
+  migrations_user_authentication:
+    build: .
+    depends_on:
+      - db_user_authentication
+    command: python app/db/migrations/create_tables.py
+    environment:
+      - PYTHONPATH=/app
+
+  user_authentication_service:
+    build: .
+    depends_on:
+      - db_user_authentication
+      - migrations_user_authentication
+    ports:
+      - "8001:8000"
+    command: uvicorn app.main:app --host 0.0.0.0 --port 8000 --reload
+    environment:
+      - PYTHONPATH=/app
+
+volumes:
+  postgres_data: {}
