@@ -1,10 +1,9 @@
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
-from app.api.auth_routes import router
+from app.api import auth_routes
 
-app = FastAPI(title="LEROI Backend-User Authentication")
-description="API for user authentication, credits management, and more. Provides endpoints for registration, login, 2FA, credits, and user management.",
-
+app = FastAPI(title="Users authentication service")
+app.include_router(auth_routes.router, prefix="/users_authentication_path", tags=["users_authentication"])
 
 app.add_middleware(
 	CORSMiddleware,
@@ -13,8 +12,6 @@ app.add_middleware(
 	allow_methods=["*"],
 	allow_headers=["*"],
 )
-
-app.include_router(router)
 
 if __name__ == "__main__":
 	import uvicorn
