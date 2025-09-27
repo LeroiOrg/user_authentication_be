@@ -14,7 +14,9 @@ client = TestClient(app)
 # Mock global para que verify_password siempre devuelva True en todos los tests
 @pytest.fixture(autouse=True)
 def always_verify_password_true():
-    with patch("app.services.auth_service.verify_password", return_value=True):
+    # Parchear tanto en el servicio base como en el handler (que hace import por nombre)
+    with patch("app.services.auth_service.verify_password", return_value=True), \
+         patch("app.services.auth_handlers.verify_password", return_value=True):
         yield
 
 # Mock user data
@@ -65,12 +67,10 @@ def test_login_user(mock_db_session):
     user_instance.email = mock_user["email"]
     # El primer llamado es para User, el segundo para BlockedEmail
     mock_db_session.query.return_value.filter_by.return_value.first.side_effect = [user_instance, None]
-    from unittest.mock import patch
-    with patch("app.api.auth_routes.verify_password", return_value=True):
-        response = client.post("/users_authentication_path/login", json={
-            "email": "testuser@example.com",
-            "password": "testpass123"
-        })
+    response = client.post("/users_authentication_path/login", json={
+        "email": "testuser@example.com",
+        "password": "testpass123"
+    })
     assert response.status_code == 200
     assert "access_token" in response.json()
 
@@ -84,8 +84,8 @@ def test_forgot_password(mock_user_model, mock_db_session):
     user_instance.provider = mock_user["provider"]
     user_instance.tfa_enabled = False
     mock_db_session.query.return_value.filter_by.return_value.first.return_value = user_instance
-    with patch("app.api.auth_routes.fastmail.send_message", return_value=None):
-        with patch("app.services.auth_service.create_access_token", return_value="token123"):
+    with patch("app.services.auth_handlers.fastmail.send_message", return_value=None):
+        with patch("app.services.auth_handlers.create_access_token", return_value="token123"):
             response = client.post("/users_authentication_path/forgot-password", json={
                 "email": "testuser@example.com"
             })
@@ -105,7 +105,7 @@ def test_update_user(mock_db_session):
     mock_db_session.query.return_value.filter.return_value.first.return_value = user_instance
     # Mock token JWT
     token = "fake.jwt.token"
-    with patch("app.api.auth_routes.decode_access_token", return_value={"email": "testuser@example.com"}):
+    with patch("app.services.auth_handlers.decode_access_token", return_value={"email": "testuser@example.com"}):
         headers = {"Authorization": f"Bearer {token}"}
         response = client.put("/users_authentication_path/update-user", json={"first_name": "NuevoNombre"}, headers=headers)
     assert response.status_code == 200
@@ -124,7 +124,7 @@ def test_delete_user(mock_db_session):
     mock_db_session.query.return_value.filter_by.return_value.first.return_value = user_instance
     # Mock token JWT con rol admin
     token = "fake.jwt.token"
-    with patch("app.api.auth_routes.decode_access_token", return_value={"email": "testuser@example.com", "role": "admin"}):
+    with patch("app.services.auth_handlers.decode_access_token", return_value={"email": "testuser@example.com", "role": "admin"}):
         headers = {"Authorization": f"Bearer {token}"}
         response = client.delete(f"/users_authentication_path/delete-user/{user_instance.email}", headers=headers)
     assert response.status_code == 200
