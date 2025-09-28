@@ -82,15 +82,16 @@ def verify_code(db: Session, email: str, code: str) -> bool:
     return False
 
 def login_or_register_google(db: Session, email: str, name: str):
-    user = db.query(User).filter_by(correo=email).first()
+    # Use current English model fields
+    user = db.query(User).filter_by(email=email).first()
     if not user:
         user = User(
-            nombre=name,
-            apellido='',
-            correo=email,
-            contraseña=None,
-            proveedor="google",
-            creditos=1000
+            first_name=name,
+            last_name='',
+            email=email,
+            password=None,
+            provider="google",
+            credits=1000,
         )
         db.add(user)
         db.commit()

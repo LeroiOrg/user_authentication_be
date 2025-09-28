@@ -93,7 +93,8 @@ async def login_user(request: UserLoginRequest, db: Session = Depends(get_db)):
 @router.post("/login-google")
 async def login_google(request: GoogleLoginRequest, db: Session = Depends(get_db)):
     from app.services.auth_handlers import login_with_google as svc_login_with_google
-    return svc_login_with_google(db, request.email, request.first_name)
+    # GoogleLoginRequest defines 'name'; service expects (email, first_name)
+    return svc_login_with_google(db, request.email, request.name)
 
 # Validate token
 @router.get("/validate-token")

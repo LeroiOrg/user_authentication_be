@@ -127,6 +127,9 @@ def register_user(db: Session, first_name: str, last_name: str | None, email: st
     blocked_email = db.query(BlockedEmail).filter(BlockedEmail.email == email).first()
     if blocked_email:
         raise HTTPException(status_code=400, detail="Este email está bloqueado y no puede registrarse.")
+    existing = db.query(User).filter_by(email=email).first()
+    if existing:
+        raise HTTPException(status_code=400, detail="El correo ya está registrado.")
     hashed_password = get_password_hash(password) if password else None
     user = User(
         first_name=first_name,
@@ -139,7 +142,22 @@ def register_user(db: Session, first_name: str, last_name: str | None, email: st
     db.add(user)
     db.commit()
     db.refresh(user)
-    return {"status": "success", "message": "Usuario registrado correctamente"}
+    access_token = create_access_token(
+        data={
+            "user_id": user.user_id,
+            "first_name": user.first_name,
+            "last_name": user.last_name,
+            "email": user.email,
+            "provider": user.provider,
+            "tfa_enabled": user.tfa_enabled,
+        }
+    )
+    return {
+        "status": "success",
+        "message": "Registro exitoso",
+        "access_token": access_token,
+        "is_new_user": True
+    }
 
 
 def login_user(db: Session, email: str, password: str) -> dict:
@@ -393,10 +411,22 @@ def update_user_credits(token: str, db: Session, email: str, amount: int) -> dic
 
 
 def login_with_google(db: Session, email: str, first_name: str) -> dict:
-    """Inicia sesión o registra un usuario con Google y devuelve el access_token.
-    Conserva exactamente el comportamiento original del endpoint.
-    """
-    user = login_or_register_google(db, email, first_name)
+    """Inicia sesión o registra un usuario con Google y devuelve el access_token y si es nuevo."""
+    user = db.query(User).filter_by(email=email).first()
+    is_new_user = False
+    if not user:
+        user = User(
+            first_name=first_name,
+            last_name='',
+            email=email,
+            password=None,
+            provider="google",
+            credits=1000,
+        )
+        db.add(user)
+        db.commit()
+        db.refresh(user)
+        is_new_user = True
     access_token = create_access_token(
         data={
             "user_id": user.user_id,
@@ -407,4 +437,9 @@ def login_with_google(db: Session, email: str, first_name: str) -> dict:
             "tfa_enabled": user.tfa_enabled,
         }
     )
-    return {"status": "success", "access_token": access_token, "token_type": "bearer"}
+    return {
+        "status": "success",
+        "access_token": access_token,
+        "token_type": "bearer",
+        "is_new_user": is_new_user
+    }
