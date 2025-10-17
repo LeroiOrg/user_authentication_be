@@ -20,3 +20,4 @@ sqlalchemy
 PyJWT
 fastapi_mail
 mercadopago
+google-cloud-pubsub
