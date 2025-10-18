@@ -2,7 +2,6 @@ import os
 import jwt
 from datetime import timedelta, datetime, timezone
 from fastapi import HTTPException
-from fastapi_mail import MessageSchema
 from sqlalchemy.orm import Session
 
 from app.models.user_model import User
@@ -15,7 +14,7 @@ from app.services.auth_service import (
     save_verification_code,
     verify_code,
 )
-from app.services.email_service import fastmail
+from app.services.email_service import send_email_html
 from app.services.auth_service import login_or_register_google
 
 # Read from environment (.env loaded by runtime) with safe defaults
@@ -33,23 +32,23 @@ def check_email_exists(db: Session, email: str) -> dict:
 async def send_verification_email(db: Session, email: str, code: str) -> dict:
     try:
         save_verification_code(db, email, code)
-        message = MessageSchema(
+        html = (
+            f"<html>"
+            f"<body style='font-family: Arial, sans-serif; text-align: center; margin: 0; padding: 40px;'>"
+            f"<h1 style='font-size: 30px; font-weight: bold; color: #ffb923;'>Código de Verificación</h1>"
+            f"<p style='font-size: 20px; color: #000000;'>Tu código de verificación es:</p>"
+            f"<h2 style='font-size: 40px; color: #835bfc;'>{code}</h2>"
+            f"<p style='font-size: 16px; color: #000000;'>Este código expirará en 5 minutos.</p>"
+            f"<p style='font-size: 16px; color: #000000;'>Si no solicitaste este código, puedes ignorar este email.</p>"
+            f"</body>"
+            f"</html>"
+        )
+        await send_email_html(
             subject="Verificación de email - LEROI",
             recipients=[email],
-            body=(
-                f"<html>"
-                f"<body style='font-family: Arial, sans-serif; text-align: center; margin: 0; padding: 40px;'>"
-                f"<h1 style='font-size: 30px; font-weight: bold; color: #ffb923;'>Código de Verificación</h1>"
-                f"<p style='font-size: 20px; color: #000000;'>Tu código de verificación es:</p>"
-                f"<h2 style='font-size: 40px; color: #835bfc;'>{code}</h2>"
-                f"<p style='font-size: 16px; color: #000000;'>Este código expirará en 5 minutos.</p>"
-                f"<p style='font-size: 16px; color: #000000;'>Si no solicitaste este código, puedes ignorar este email.</p>"
-                f"</body>"
-                f"</html>"
-            ),
-            subtype="html",
+            html_body=html,
+            plain_fallback=f"Tu código de verificación es: {code}"
         )
-        await fastmail.send_message(message)
         return {"status": "success", "message": "Código de verificación enviado", "email": email}
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Error al enviar el email: {str(e)}")
@@ -222,23 +221,23 @@ async def forgot_password(db: Session, email: str) -> dict:
             expires_delta=timedelta(minutes=10),
         )
         reset_link = f"{FRONTEND_URL}/reset-password?token={reset_token}"
-        message = MessageSchema(
+        html = (
+            f"<html>"
+            f"<body style='font-family: Arial, sans-serif; text-align: center; margin: 0; padding: 40px;'>"
+            f"<h1 style='font-size: 30px; font-weight: bold; color: #ffb923;'>Restablecimiento de Contraseña</h1>"
+            f"<p style='font-size: 20px; color: #000000;'>Haz clic en el enlace para restablecer tu contraseña:</p>"
+            f"<a href='{reset_link}' style='font-size: 20px; color: #835bfc;'>Restablecer Contraseña</a>"
+            f"<p style='font-size: 16px; color: #000000;'>Este enlace expirará en 10 minutos.</p>"
+            f"<p style='font-size: 16px; color: #000000;'>Si no solicitaste este cambio, puedes ignorar este email.</p>"
+            f"</body>"
+            f"</html>"
+        )
+        await send_email_html(
             subject="Restablecimiento de Contraseña - LEROI",
             recipients=[email],
-            body=(
-                f"<html>"
-                f"<body style='font-family: Arial, sans-serif; text-align: center; margin: 0; padding: 40px;'>"
-                f"<h1 style='font-size: 30px; font-weight: bold; color: #ffb923;'>Restablecimiento de Contraseña</h1>"
-                f"<p style='font-size: 20px; color: #000000;'>Haz clic en el enlace para restablecer tu contraseña:</p>"
-                f"<a href='{reset_link}' style='font-size: 20px; color: #835bfc;'>Restablecer Contraseña</a>"
-                f"<p style='font-size: 16px; color: #000000;'>Este enlace expirará en 10 minutos.</p>"
-                f"<p style='font-size: 16px; color: #000000;'>Si no solicitaste este cambio, puedes ignorar este email.</p>"
-                f"</body>"
-                f"</html>"
-            ),
-            subtype="html",
+            html_body=html,
+            plain_fallback=f"Visita este enlace para restablecer tu contraseña: {reset_link}"
         )
-        await fastmail.send_message(message)
         return {"status": "success", "message": "Enlace de restablecimiento enviado", "email": email}
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Error al enviar el email: {str(e)}")
