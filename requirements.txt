@@ -21,3 +21,4 @@ psycopg2-binary
 #PyJWT
 #fastapi_mail
 #mercadopago
+google-cloud-pubsub
