@@ -21,6 +21,11 @@ def process_message(message):
             email = payload["email"]
             credits = int(payload["credits"])
             update_user_credits_in_db(email, credits)
+            
+        elif event == "credit_update":
+            email = payload.get("email")
+            credits_change = int(payload.get("credits_change", 0))
+            update_user_credits_in_db(email, credits_change)
 
         message.ack()
     except Exception as e:
@@ -34,9 +39,9 @@ def update_user_credits_in_db(email: str, credits: int):
         if user:
             user.credits += credits
             db.commit()
-            print(f" Créditos actualizados para {email}: +{credits}")
+            print(f"Créditos actualizados para {email}: +{credits}")
         else:
-            print(f" Usuario {email} no encontrado en la base de datos.")
+            print(f"Usuario {email} no encontrado en la base de datos.")
     except Exception as e:
         db.rollback()
         print(f" Error actualizando DB: {e}")
@@ -46,12 +51,23 @@ def update_user_credits_in_db(email: str, credits: int):
 def start_subscriber():
     subscriber = pubsub_v1.SubscriberClient()
     subscription_path = subscriber.subscription_path(PROJECT_ID, SUBSCRIPTION_ID)
-
     flow_control = FlowControl(max_messages=1)
 
     def callback(message):
+        print(f"📩 Mensaje recibido en callback")
         process_message(message)
 
-    print(f" Escuchando mensajes en {subscription_path} ...")
-    subscriber.subscribe(subscription_path, callback=callback, flow_control=flow_control)
-    threading.Event().wait()
+    print(f"🚀 Escuchando mensajes en {subscription_path} ...")
+    future = subscriber.subscribe(
+        subscription_path,
+        callback=callback,
+        flow_control=flow_control
+    )
+
+    try:
+        future.result()
+    except KeyboardInterrupt:
+        future.cancel()
+
+if __name__ == "__main__":
+    start_subscriber()
