@@ -18,10 +18,10 @@ from app.services.email_service import send_email_html
 from app.services.auth_service import login_or_register_google
 
 # Read from environment (.env loaded by runtime) with safe defaults
-SECRET_KEY = os.getenv("SECRET_KEY", "secret")
-ALGORITHM = os.getenv("ALGORITHM", "HS256")
+SECRET_KEY = os.getenv("SECRET_KEY")
+ALGORITHM = os.getenv("ALGORITHM")
 # No hardcoded fallback; must come from environment
-FRONTEND_URL = os.getenv("FRONTEND_URL")
+FRONTEND_URL = os.getenv("FRONTEND_URL", "https://leroi-front-next.vercel.app")
 
 
 def check_email_exists(db: Session, email: str) -> dict:
