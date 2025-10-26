@@ -40,8 +40,6 @@ from app.services.auth_handlers import (
     update_user as svc_update_user,
     get_user_credits as svc_get_user_credits,
     update_user_credits as svc_update_user_credits,
-    # google
-    
 )
 from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
 from datetime import timedelta, datetime, timezone

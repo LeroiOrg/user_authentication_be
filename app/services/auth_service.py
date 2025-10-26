@@ -8,8 +8,8 @@ from app.models.blocked_email import BlockedEmail
 from app.models.verification_code import VerificationCode
 from app.schemas.user_scheme import UserCreate
 
-SECRET_KEY = os.getenv("SECRET_KEY", "secret")
-ALGORITHM = os.getenv("ALGORITHM", "HS256")
+SECRET_KEY = os.getenv("SECRET_KEY")
+ALGORITHM = os.getenv("ALGORITHM")
 ACCESS_TOKEN_EXPIRE_MINUTES = 60
 
 pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
