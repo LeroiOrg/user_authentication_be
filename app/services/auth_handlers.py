@@ -17,10 +17,8 @@ from app.services.auth_service import (
 from app.services.email_service import send_email_html
 from app.services.auth_service import login_or_register_google
 
-# Read from environment (.env loaded by runtime) with safe defaults
 SECRET_KEY = os.getenv("SECRET_KEY")
 ALGORITHM = os.getenv("ALGORITHM")
-# No hardcoded fallback; must come from environment
 FRONTEND_URL = os.getenv("FRONTEND_URL", "https://leroi-front-next.vercel.app")
 
 
@@ -331,8 +329,6 @@ def delete_user(token: str, db: Session, email: str) -> dict:
         user_to_delete = db.query(User).filter_by(email=email).first()
         if not user_to_delete:
             raise HTTPException(status_code=404, detail="User not found")
-        # Si tienes Roadmap, descomenta y borra asociados
-        # db.query(Roadmap).filter(Roadmap.user_id_creador == user_to_delete.user_id).delete(synchronize_session=False)
         db.delete(user_to_delete)
         db.commit()
         return {"status": "success", "message": "User deleted successfully", "deleted_user_email": email}
