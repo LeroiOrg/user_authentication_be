@@ -1,36 +1,39 @@
-version: '3.8'
+version: "3.9"
 
 services:
-  db_user_authentication:
+  db:
     image: postgres:15
+    container_name: postgres
     restart: always
     environment:
-      POSTGRES_USER: leroiuser
-      POSTGRES_PASSWORD: leroipassword
-      POSTGRES_DB: leroidb
+      POSTGRES_USER: user
+      POSTGRES_PASSWORD: password
+      POSTGRES_DB: userdb
     ports:
-      - "5433:5432"
+      - "5432:5432"
     volumes:
       - postgres_data:/var/lib/postgresql/data
 
-  migrations_user_authentication:
+  app:
     build: .
+    container_name: usersapp
+    restart: always
     depends_on:
-      - db_user_authentication
-    command: python app/db/migrations/create_tables.py
-    environment:
-      - PYTHONPATH=/app
-
-  user_authentication_service:
-    build: .
-    depends_on:
-      - db_user_authentication
-      - migrations_user_authentication
+      - db
+    env_file:
+      - .env
     ports:
       - "8080:8080"
-    command: uvicorn app.main:app --host 0.0.0.0 --port 8080 --reload
+    volumes:
+      - ./keys:/app/keys
     environment:
-      - PYTHONPATH=/app
+      DATABASE_URL: postgresql+psycopg2://user:password@db:5432/userdb
+    command:
+      - bash
+      - -c
+      - |
+        /wait-for-it.sh db:5432 -- python app/db/migrations/create_tables.py &&
+        uvicorn app.main:app --host 0.0.0.0 --port 8080
 
 volumes:
-  postgres_data: {}
+  postgres_data:
