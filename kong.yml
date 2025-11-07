@@ -1,0 +1,166 @@
+_format_version: "3.0"
+
+services:
+  - name: auth-service
+    url: http://usersapp:8080
+    routes:
+      - name: check-email
+        paths:
+          - /users_authentication_path/check-email
+        strip_path: false
+        methods:
+          - POST
+          - OPTIONS
+      
+      - name: send-verification
+        paths:
+          - /users_authentication_path/send-verification
+        strip_path: false
+        methods:
+          - POST
+          - OPTIONS
+      
+      - name: verify-code
+        paths:
+          - /users_authentication_path/verify-code
+        strip_path: false
+        methods:
+          - POST
+          - OPTIONS
+      
+      - name: verify-2fa-code
+        paths:
+          - /users_authentication_path/verify-2fa-code
+        strip_path: false
+        methods:
+          - POST
+          - OPTIONS
+      
+      - name: register
+        paths:
+          - /users_authentication_path/register
+        strip_path: false
+        methods:
+          - POST
+          - OPTIONS
+      
+      - name: login
+        paths:
+          - /users_authentication_path/login
+        strip_path: false
+        methods:
+          - POST
+          - OPTIONS
+      
+      - name: login-google
+        paths:
+          - /users_authentication_path/login-google
+        strip_path: false
+        methods:
+          - POST
+          - OPTIONS
+      
+      - name: validate-token
+        paths:
+          - /users_authentication_path/validate-token
+        strip_path: false
+        methods:
+          - GET
+          - OPTIONS
+      
+      - name: forgot-password
+        paths:
+          - /users_authentication_path/forgot-password
+        strip_path: false
+        methods:
+          - POST
+          - OPTIONS
+      
+      - name: reset-password
+        paths:
+          - /users_authentication_path/reset-password
+        strip_path: false
+        methods:
+          - POST
+          - OPTIONS
+      
+      - name: blocked-email
+        paths:
+          - /users_authentication_path/blocked
+        strip_path: false
+        methods:
+          - GET
+          - OPTIONS
+      
+      - name: user-profile
+        paths:
+          - /users_authentication_path/user-profile
+        strip_path: false
+        methods:
+          - GET
+          - OPTIONS
+      
+      - name: user-roadmaps
+        paths:
+          - /users_authentication_path/user-roadmaps
+        strip_path: false
+        methods:
+          - GET
+          - OPTIONS
+      
+      - name: update-2fa
+        paths:
+          - /users_authentication_path/update-2fa
+        strip_path: false
+        methods:
+          - PUT
+          - OPTIONS
+      
+      - name: delete-user
+        paths:
+          - /users_authentication_path/delete-user
+        strip_path: false
+        methods:
+          - DELETE
+          - OPTIONS
+      
+      - name: update-user
+        paths:
+          - /users_authentication_path/update-user
+        strip_path: false
+        methods:
+          - PUT
+          - OPTIONS
+      
+      - name: user-credits
+        paths:
+          - /users_authentication_path/user-credits
+        strip_path: false
+        methods:
+          - GET
+          - PATCH
+          - OPTIONS
+    
+    plugins:
+      - name: cors
+        config:
+          origins:
+            - "*"
+          methods:
+            - GET
+            - POST
+            - PUT
+            - PATCH
+            - DELETE
+            - OPTIONS
+          headers:
+            - Authorization
+            - Content-Type
+            - Accept
+            - Origin
+            - X-Api-Key
+            - x-api-key
+          exposed_headers:
+            - X-Auth-Token
+          credentials: true
+          max_age: 3600
