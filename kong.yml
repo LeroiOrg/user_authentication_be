@@ -2,7 +2,7 @@ _format_version: "3.0"
 
 services:
   - name: auth-service
-    url: http://usersapp:8080
+    url: http://lb-auth:80
     routes:
       - name: check-email
         paths:
@@ -166,7 +166,7 @@ services:
           max_age: 3600
 
   - name: learningpath-service
-    url: http://learningpath:8090
+    url: http://lb-learningpath:80
     routes:
       - name: process-documents
         paths:
