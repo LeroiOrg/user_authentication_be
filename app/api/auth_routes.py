@@ -176,3 +176,8 @@ async def update_user_credits(
 ):
     token = credentials.credentials
     return svc_update_user_credits(token, db, email, request.amount)
+
+
+@router.get("/health")
+async def health_check():
+    return {"status": "ok"}
