@@ -164,3 +164,78 @@ services:
             - X-Auth-Token
           credentials: true
           max_age: 3600
+
+  - name: learningpath-service
+    url: http://learningpath:8090
+    routes:
+      - name: process-documents
+        paths:
+          - /learning_path/documents
+        strip_path: false
+        methods:
+          - POST
+          - OPTIONS
+
+      - name: generate-roadmap
+        paths:
+          - /learning_path/roadmaps
+        strip_path: false
+        methods:
+          - POST
+          - OPTIONS
+
+      - name: get-user-roadmaps
+        paths:
+          - /learning_path/roadmaps/user/{user_email}
+        strip_path: false
+        methods:
+          - GET
+          - OPTIONS
+
+      - name: get-latest-roadmap
+        paths:
+          - /learning_path/roadmaps/user/{user_email}/latest
+        strip_path: false
+        methods:
+          - GET
+          - OPTIONS
+
+      - name: generate-questions
+        paths:
+          - /learning_path/questions
+        strip_path: false
+        methods:
+          - POST
+          - OPTIONS
+
+      - name: related-topics
+        paths:
+          - /learning_path/related-topics
+        strip_path: false
+        methods:
+          - POST
+          - OPTIONS
+        
+    plugins:
+      - name: cors
+        config:
+          origins:
+            - "*"
+          methods:
+            - GET
+            - POST
+            - PUT
+            - PATCH
+            - DELETE
+            - OPTIONS
+          headers:
+            - Authorization
+            - Content-Type
+            - Accept
+            - Origin
+            - X-Api-Key
+            - x-api-key
+          exposed_headers:
+            - X-Auth-Token
+          credentials: true
+          max_age: 3600

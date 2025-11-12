@@ -13,6 +13,8 @@ services:
       - "5432:5432"
     volumes:
       - postgres_data:/var/lib/postgresql/data
+    networks:
+      - internal_net
 
   app:
     build: .
@@ -34,6 +36,32 @@ services:
       - |
         /wait-for-it.sh db:5432 -- python app/db/migrations/create_tables.py &&
         uvicorn app.main:app --host 0.0.0.0 --port 8080
+    networks:
+      - internal_net  
+      - proxy_net
+
+  learningpath:
+    build:
+      context: ../learning_path_be
+      dockerfile: Dockerfile
+    container_name: learningpath
+    restart: always
+    depends_on:
+      - db
+    env_file:
+      - ../learning_path_be/.env
+    ports:
+      - "8090:8090"  
+    networks:
+      - internal_net
+      - proxy_net
+    environment:
+      DATABASE_URL: postgresql+psycopg2://user:password@db:5432/userdb
+    command:
+      - bash
+      - -c
+      - |
+        /wait-for-it.sh db:5432 -- uvicorn app.main:app --host 0.0.0.0 --port 8090
 
   kong:
     image: kong:3.4
@@ -55,6 +83,14 @@ services:
       - "8001:8001"
     volumes:
       - ./kong.yml:/kong/kong.yml:ro
+    networks:
+      - proxy_net
 
 volumes:
   postgres_data:
+
+networks:
+  proxy_net:
+    driver: bridge    
+  internal_net:
+    driver: bridge    
