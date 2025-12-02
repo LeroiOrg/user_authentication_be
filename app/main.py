@@ -17,14 +17,14 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-@app.on_event("startup")
-def startup_event():
-    """
-    Cuando se inicie el servicio, también se lanza el hilo del subscriber Pub/Sub.
-    """
-    thread = threading.Thread(target=start_subscriber, daemon=True)
-    thread.start()
-    print(" Servicio iniciado con Pub/Sub listener activo.")
+#@app.on_event("startup")
+#def startup_event():
+#    """
+#    Cuando se inicie el servicio, también se lanza el hilo del subscriber Pub/Sub.
+#    """
+#    thread = threading.Thread(target=start_subscriber, daemon=True)
+#    thread.start()
+#    print(" Servicio iniciado con Pub/Sub listener activo.")
     
 if __name__ == "__main__":
     import uvicorn
