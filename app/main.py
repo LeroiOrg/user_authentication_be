@@ -9,6 +9,11 @@ from app.pubsub.subscriber import start_subscriber
 app = FastAPI(title="Users authentication service")
 app.include_router(auth_routes.router, prefix="/users_authentication_path", tags=["users_authentication"])
 
+@app.get("/")
+async def root_health_check():
+    # Devuelve una respuesta 200 OK
+    return {"status": "ok", "message": "Health Check Root"}
+
 app.add_middleware(
     CORSMiddleware,
     allow_origins=["*"],
